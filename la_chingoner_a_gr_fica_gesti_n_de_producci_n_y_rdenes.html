@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Chingonería Gráfica - Gestión de Producción y Órdenes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            black: '#100c08',
+                            guinda: '#8d153e',
+                            guindaDark: '#6d0f2e',
+                            crema: '#f5f1e8',
+                            cremaCard: '#faf7f2',
+                            darkCard: '#1a1410',
+                            darkBg: '#100c08'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Light mode root overrides */
+        html.light body {
+            background-color: #f5f1e8;
+            color: #100c08;
+        }
+        
+        /* Dark mode overrides */
+        html.dark body {
+            background-color: #100c08;
+            color: #f5f1e8;
+        }
+
+        .backdrop-blur-custom { backdrop-filter: blur(8px); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #8d153e; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6d0f2e; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased transition-colors duration-300">
+
+    <header class="border-b transition-colors duration-300 sticky top-0 z-40 px-4 lg:px-8 py-3 flex items-center justify-between shadow-lg" id="app-header">
+        <div class="flex items-center space-x-3">
+            <div>
+                <h1 class="font-bold text-lg tracking-tight flex items-center gap-2">
+                    La Chingonería Gráfica <span class="text-xs px-2 py-0.5 rounded-full bg-[#8d153e]/20 text-[#8d153e] dark:text-rose-300 border border-[#8d153e]/30">Preprensa & Impresión</span>
+                </h1>
+                <p class="text-xs opacity-75">lachingoneriagrafia@gmail.com • Control de órdenes, cotizaciones y taller</p>
+            </div>
+        </div>
+
+        <!-- Global Action Buttons & Theme Toggle -->
+        <div class="flex items-center gap-2.5">
+            <button onclick="toggleTheme()" class="p-2 rounded-xl border border-current opacity-80 hover:opacity-100 transition" title="Cambiar Modo Claro/Oscuro">
+                <i data-lucide="moon" id="theme-icon" class="w-4 h-4"></i>
+            </button>
+            <button onclick="openNewQuoteModal()" class="flex items-center gap-1.5 px-4 py-2 bg-[#8d153e] hover:bg-[#6d0f2e] text-white text-xs font-semibold rounded-xl shadow-lg transition">
+                <i data-lucide="file-text" class="w-4 h-4"></i> Nueva Cotización
+            </button>
+        </div>
+    </header>
+
+    <nav class="border-b px-4 lg:px-8 flex overflow-x-auto space-x-1 py-2 text-xs font-medium z-30 transition-colors duration-300" id="app-nav">
+        <button onclick="switchTab('resumen')" id="tab-resumen" class="tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 bg-[#8d153e] text-white shadow">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Resumen
+        </button>
+        <button onclick="switchTab('cotizaciones')" id="tab-cotizaciones" class="tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 opacity-75 hover:opacity-100">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500"></i> Cotizaciones
+        </button>
+        <button onclick="switchTab('ordenes')" id="tab-ordenes" class="tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 opacity-75 hover:opacity-100">
+            <i data-lucide="kanban" class="w-4 h-4"></i> Tablero Órdenes
+        </button>
+        <button onclick="switchTab('clientes')" id="tab-clientes" class="tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 opacity-75 hover:opacity-100">
+            <i data-lucide="users" class="w-4 h-4"></i> Clientes
+        </button>
+        <button onclick="switchTab('reportes')" id="tab-reportes" class="tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 opacity-75 hover:opacity-100">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Reportes
+        </button>
+    </nav>
+
+    <main class="flex-1 p-4 lg:p-8 max-w-[1600px] w-full mx-auto">
+
+        <!-- 1. RESUMEN VIEW -->
+        <section id="view-resumen" class="space-y-6 view-section">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="border p-5 rounded-2xl shadow-sm relative overflow-hidden transition-colors card-box">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider opacity-75">Órdenes Activas</p>
+                            <h3 id="stat-active-orders" class="text-3xl font-bold mt-1">0</h3>
+                        </div>
+                        <div class="p-3 bg-blue-500/10 text-blue-500 rounded-xl"><i data-lucide="clock" class="w-6 h-6"></i></div>
+                    </div>
+                    <div class="mt-4 flex items-center text-xs text-blue-500 gap-1"><i data-lucide="trending-up" class="w-3.5 h-3.5"></i> En proceso en taller</div>
+                </div>
+                <div class="border p-5 rounded-2xl shadow-sm relative overflow-hidden transition-colors card-box">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider opacity-75">Cotizaciones Pendientes</p>
+                            <h3 id="stat-pending-quotes" class="text-3xl font-bold mt-1">0</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl"><i data-lucide="file-spreadsheet" class="w-6 h-6"></i></div>
+                    </div>
+                    <div class="mt-4 flex items-center text-xs text-emerald-500 gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Listas para aprobar</div>
+                </div>
+                <div class="border p-5 rounded-2xl shadow-sm relative overflow-hidden transition-colors card-box">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider opacity-75">En Producción / Acabados</p>
+                            <h3 id="stat-production-orders" class="text-3xl font-bold mt-1">0</h3>
+                        </div>
+                        <div class="p-3 bg-violet-500/10 text-violet-500 rounded-xl"><i data-lucide="cpu" class="w-6 h-6"></i></div>
+                    </div>
+                    <div class="mt-4 flex items-center text-xs text-violet-500 gap-1"><i data-lucide="activity" class="w-3.5 h-3.5"></i> Flujo activo</div>
+                </div>
+            </div>
+
+            <!-- Recent activity & quick lists -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 border rounded-2xl p-6 shadow-sm card-box">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-base flex items-center gap-2">
+                            <i data-lucide="activity" class="w-5 h-5 text-[#8d153e]"></i> Órdenes Recientes en Taller
+                        </h3>
+                        <button onclick="switchTab('ordenes')" class="text-xs text-[#8d153e] font-semibold hover:underline">Ver todas →</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="uppercase font-semibold opacity-75 border-b">
+                                <tr>
+                                    <th class="p-3">ID</th>
+                                    <th class="p-3">Proyecto / Cliente</th>
+                                    <th class="p-3">Etapa Actual</th>
+                                    <th class="p-3">Prioridad</th>
+                                    <th class="p-3">Entrega</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashboard-recent-orders" class="divide-y">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Quick actions / Notes -->
+                <div class="border rounded-2xl p-6 shadow-sm flex flex-col justify-between card-box">
+                    <div>
+                        <h3 class="font-bold text-base flex items-center gap-2 mb-3">
+                            <i data-lucide="zap" class="w-5 h-5 text-amber-500"></i> Accesos Rápidos Pro
+                        </h3>
+                        <p class="text-xs opacity-75 mb-4">Usa estos accesos para agilizar la captura de trabajos recurrentes en preprensa.</p>
+                        <div class="space-y-2.5">
+                            <button onclick="openNewQuoteModal()" class="w-full text-left px-4 py-3 border rounded-xl flex items-center justify-between text-xs font-semibold transition quick-btn">
+                                <span class="flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4 text-emerald-500"></i> Generar Cotización</span>
+                                <i data-lucide="chevron-right" class="w-4 h-4 opacity-50"></i>
+                            </button>
+                            <button onclick="switchTab('cotizaciones')" class="w-full text-left px-4 py-3 border rounded-xl flex items-center justify-between text-xs font-semibold transition quick-btn">
+                                <span class="flex items-center gap-2"><i data-lucide="file-spreadsheet" class="w-4 h-4 text-[#8d153e]"></i> Ver Cotizaciones Pendientes</span>
+                                <i data-lucide="chevron-right" class="w-4 h-4 opacity-50"></i>
+                            </button>
+                            <button onclick="switchTab('clientes')" class="w-full text-left px-4 py-3 border rounded-xl flex items-center justify-between text-xs font-semibold transition quick-btn">
+                                <span class="flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-cyan-500"></i> Directorio de Clientes</span>
+                                <i data-lucide="chevron-right" class="w-4 h-4 opacity-50"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-6 pt-4 border-t p-3 rounded-xl opacity-85">
+                        <p class="text-[11px] leading-relaxed">💡 <strong class="font-bold">Tip de Taller:</strong> Asegúrate de verificar las tintas y perfiles de color en la etapa de Diseño antes de mandar a producción.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. COTIZACIONES VIEW -->
+        <section id="view-cotizaciones" class="space-y-6 view-section hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border p-6 rounded-2xl card-box">
+                <div>
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <i data-lucide="file-spreadsheet" class="w-6 h-6 text-emerald-500"></i> Cotizaciones y Presupuestos
+                    </h2>
+                    <p class="text-xs opacity-75">Previsualiza, edita o convierte cotizaciones en órdenes de producción al ser aprobadas.</p>
+                </div>
+                <button onclick="openNewQuoteModal()" class="px-4 py-2.5 bg-[#8d153e] hover:bg-[#6d0f2e] text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-md transition">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Nueva Cotización
+                </button>
+            </div>
+
+            <div class="border rounded-2xl overflow-hidden shadow-sm card-box">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="uppercase font-semibold opacity-75 border-b">
+                            <tr>
+                                <th class="p-3.5">Folio</th>
+                                <th class="p-3.5">Proyecto / Cliente</th>
+                                <th class="p-3.5">Productos / Descripción</th>
+                                <th class="p-3.5">Monto Total</th>
+                                <th class="p-3.5">Estado</th>
+                                <th class="p-3.5 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="quotes-table-body" class="divide-y">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. KANBAN BOARD VIEW -->
+        <section id="view-ordenes" class="space-y-6 view-section hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border p-6 rounded-2xl card-box">
+                <div>
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <i data-lucide="kanban" class="w-6 h-6 text-[#8d153e]"></i> Tablero General de Órdenes
+                    </h2>
+                    <p class="text-xs opacity-75">Flujo operativo desde cotizaciones pendientes hasta la entrega final al cliente.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <input type="text" id="kanban-search" oninput="renderKanbanBoard()" placeholder="Buscar orden o cliente..." class="border text-xs px-3 py-2 rounded-xl pl-8 focus:outline-none focus:border-[#8d153e] w-60 bg-transparent">
+                        <i data-lucide="search" class="w-4 h-4 opacity-50 absolute left-2.5 top-2.5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kanban Columns Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7 gap-4 overflow-x-auto pb-4 items-start">
+                <div id="kanban-columns-container" class="contents"></div>
+            </div>
+        </section>
+
+        <!-- 4. CLIENTES VIEW -->
+        <section id="view-clientes" class="space-y-6 view-section hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border p-6 rounded-2xl card-box">
+                <div>
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <i data-lucide="users" class="w-6 h-6 text-cyan-500"></i> Directorio de Clientes
+                    </h2>
+                    <p class="text-xs opacity-75">Base de datos centralizada con información fiscal y de contacto.</p>
+                </div>
+                <button onclick="openClientModal()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i> Registrar Cliente
+                </button>
+            </div>
+            <div class="border rounded-2xl overflow-hidden shadow-sm card-box">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="uppercase font-semibold opacity-75 border-b">
+                            <tr>
+                                <th class="p-3.5">Empresa</th>
+                                <th class="p-3.5">Nombre</th>
+                                <th class="p-3.5">Teléfono</th>
+                                <th class="p-3.5">Correo Electrónico</th>
+                                <th class="p-3.5">RFC / Datos Fiscales</th>
+                                <th class="p-3.5 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clients-table-body" class="divide-y">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. REPORTES VIEW -->
+        <section id="view-reportes" class="space-y-6 view-section hidden">
+            <div class="border p-6 rounded-2xl card-box">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-6 h-6 text-blue-500"></i> Métricas y Reportes de Producción
+                </h2>
+                <p class="text-xs opacity-75 mt-1">Análisis de rendimiento y volumen de trabajos impresos.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="border p-6 rounded-2xl shadow-sm card-box">
+                    <h3 class="text-sm font-bold mb-4">Órdenes por Etapa Actual</h3>
+                    <div class="h-72 relative">
+                        <canvas id="chart-status"></canvas>
+                    </div>
+                </div>
+                <div class="border p-6 rounded-2xl shadow-sm card-box">
+                    <h3 class="text-sm font-bold mb-4">Trabajos Completados por Día de la Semana</h3>
+                    <div class="h-72 relative">
+                        <canvas id="chart-weekly"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- QUOTE MODAL (FULLSCREEN EXPANDED) -->
+    <div id="quoteModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black/75 backdrop-blur-custom flex items-center justify-center p-2 sm:p-6">
+        <div class="border rounded-3xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden shadow-2xl modal-box">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center px-6 py-5 border-b shrink-0 modal-header-box">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-[#8d153e]/20 text-[#8d153e] rounded-xl">
+                        <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 id="quote-modal-title" class="text-lg font-bold">Generar Nueva Cotización</h3>
+                        <p class="text-xs opacity-75">Calcula precios automáticos por producto y especificaciones de taller</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('quoteModal')" class="opacity-75 hover:opacity-100 p-2 rounded-xl transition">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1">
+                <form id="quoteForm" onsubmit="saveQuote(event)" class="space-y-6">
+                    <input type="hidden" id="quote-edit-id" value="">
+                    
+                    <!-- Top Info Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-5 rounded-2xl border modal-section-box">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold mb-1.5 opacity-85">Nombre de Proyecto / Activación (Opcional)</label>
+                            <input type="text" id="quote-project" placeholder="Ej. Lote de Exhibidores..." class="w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#8d153e] bg-transparent">
+                        </div>
+
+                        <!-- Smart Client Field with Autocomplete -->
+                        <div class="sm:col-span-2 relative">
+                            <label class="block text-xs font-semibold mb-1.5 opacity-85">Empresa / Cliente *</label>
+                            <div class="relative">
+                                <input type="text" id="quote-client-input" oninput="handleClientInput('quote')" onfocus="showClientDropdown('quote')" placeholder="Escribe o selecciona un cliente..." autocomplete="off" required class="w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#8d153e] bg-transparent">
+                                <i data-lucide="search" class="w-4 h-4 opacity-50 absolute right-3.5 top-3 pointer-events-none"></i>
+                            </div>
+                            <div id="quote-client-dropdown" class="absolute left-0 right-0 mt-1 border rounded-xl shadow-xl z-50 hidden max-h-48 overflow-y-auto modal-box">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <div class="sm:col-span-2 bg-[#8d153e]/10 p-4 rounded-xl border border-[#8d153e]/30">
+                            <label class="block text-xs font-bold text-[#8d153e] dark:text-rose-300 mb-1">Precio Total Estimado ($) *</label>
+                            <div class="relative">
+                                <span class="absolute left-3.5 top-2.5 text-[#8d153e] dark:text-rose-300 font-bold text-base">$</span>
+                                <input type="number" step="0.01" id="quote-price" required placeholder="0.00" readonly class="w-full pl-9 pr-4 py-2 border border-[#8d153e]/50 rounded-xl text-lg font-bold text-[#8d153e] dark:text-rose-200 focus:outline-none cursor-not-allowed bg-transparent" title="Suma automática basada en los precios individuales de los productos">
+                            </div>
+                            <p class="text-[11px] opacity-75 mt-1.5">ℹ️ Se calcula automáticamente sumando cada producto agregado abajo.</p>
+                        </div>
+
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold mb-1.5 opacity-85">Validez de Cotización</label>
+                            <select id="quote-validity" class="w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#8d153e] bg-transparent">
+                                <option value="15 Días">15 Días</option>
+                                <option value="30 Días">30 Días</option>
+                                <option value="7 Días">7 Días</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Products Builder Section for Quotes -->
+                    <div class="p-6 rounded-2xl border space-y-4 modal-section-box">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div>
+                                <h4 class="text-sm font-bold text-[#8d153e] dark:text-rose-300 flex items-center gap-2">
+                                    <i data-lucide="layers" class="w-4 h-4"></i> Productos y Precios Individuales
+                                </h4>
+                                <p class="text-xs opacity-75">Agrega los artículos y asigna su precio específico</p>
+                            </div>
+                            <button type="button" onclick="addProductRow('quote')" class="px-4 py-2.5 bg-[#8d153e] hover:bg-[#6d0f2e] text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow transition">
+                                <i data-lucide="plus" class="w-4 h-4"></i> Añadir Otro Producto
+                            </button>
+                        </div>
+
+                        <div id="quote-products-list" class="space-y-4">
+                            <!-- Dynamic item rows -->
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold mb-1.5 opacity-85">Notas / Condiciones Comerciales</label>
+                        <textarea id="quote-notes" rows="6" class="w-full px-4 py-3 border rounded-xl text-xs font-mono focus:outline-none focus:border-[#8d153e] bg-transparent">Condiciones Comerciales
+Los precios no incluyen IVA
+Se requiere 50% de anticipo o pago completo para iniciar producción
+Esta cotización tiene una validez de 15 días naturales
+El tiempo de entrega se confirmará una vez recibido el anticipo y aprobados los archivos finales</textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4 border-t">
+                        <button type="button" onclick="closeModal('quoteModal')" class="px-6 py-3 text-xs font-semibold border rounded-xl transition">Cancelar</button>
+                        <button type="submit" class="px-8 py-3 text-xs font-semibold text-white bg-[#8d153e] hover:bg-[#6d0f2e] rounded-xl shadow-lg transition">Guardar Cotización</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUOTE PREVIEW MODAL -->
+    <div id="quotePreviewModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black/80 backdrop-blur-custom flex items-center justify-center p-2 sm:p-6">
+        <div class="bg-white text-slate-900 rounded-3xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden shadow-2xl">
+            <!-- Modal Header Toolbar -->
+            <div class="flex justify-between items-center px-6 py-4 bg-[#100c08] text-[#f5f1e8] shrink-0">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="file-text" class="w-5 h-5 text-[#8d153e]"></i>
+                    <h3 class="font-bold text-sm">Vista Previa de Cotización Oficial</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="printQuotePreview()" class="px-4 py-2 bg-[#8d153e] hover:bg-[#6d0f2e] text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Imprimir / PDF
+                    </button>
+                    <button onclick="closeModal('quotePreviewModal')" class="opacity-75 hover:opacity-100 p-1.5 rounded-xl transition">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Printable Document Body -->
+            <div id="quote-preview-printable" class="p-8 sm:p-12 overflow-y-auto space-y-8 flex-1 bg-[#f5f1e8] text-[#100c08] font-sans">
+                <!-- Top Brand Header -->
+                <div class="flex justify-between items-start border-b-2 border-[#8d153e]/30 pb-6">
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-[#100c08]">La Chingonería Gráfica</h1>
+                        <p class="text-xs text-[#100c08]/70">lachingoneriagrafia@gmail.com</p>
+                    </div>
+                    <div class="text-right">
+                        <h2 class="text-2xl font-bold text-[#8d153e] tracking-wider">COTIZACIÓN</h2>
+                        <h3 id="prev-quote-id" class="text-lg font-bold text-[#100c08]">COT-1001</h3>
+                    </div>
+                </div>
+
+                <!-- Client & Dates Grid -->
+                <div class="bg-white p-5 rounded-2xl border border-[#100c08]/10 space-y-3 shadow-sm">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-[#8d153e]">Datos del Cliente y Fechas</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <p><strong class="text-[#100c08]">Cliente:</strong> <span id="prev-quote-client">-</span></p>
+                            <p class="mt-1"><strong class="text-[#100c08]">Proyecto:</strong> <span id="prev-quote-project">-</span></p>
+                        </div>
+                        <div class="sm:text-right">
+                            <p><strong class="text-[#100c08]">Fecha de Emisión:</strong> <span id="prev-quote-date">-</span></p>
+                            <p class="mt-1"><strong class="text-[#100c08]">Válida hasta:</strong> <span id="prev-quote-validity">-</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Table -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-[#8d153e]">Productos y Servicios</h4>
+                    <div class="overflow-x-auto border border-[#100c08]/10 rounded-2xl shadow-sm bg-white">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-[#100c08] text-[#f5f1e8] font-semibold">
+                                <tr>
+                                    <th class="p-3">#</th>
+                                    <th class="p-3">Producto</th>
+                                    <th class="p-3">Descripción / Especificaciones</th>
+                                    <th class="p-3 text-center">Cantidad</th>
+                                    <th class="p-3 text-right">Precio Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prev-quote-items" class="divide-y divide-[#100c08]/10 text-[#100c08]">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Totals Section -->
+                <div class="flex justify-end pt-2">
+                    <div class="w-full sm:w-80 space-y-2 bg-white p-4 rounded-2xl border border-[#100c08]/10 shadow-sm">
+                        <div class="flex justify-between text-xs text-[#100c08]/80">
+                            <span>Subtotal:</span>
+                            <span id="prev-quote-subtotal">$0.00</span>
+                        </div>
+                        <div class="flex justify-between text-sm font-bold text-[#100c08] pt-2 border-t border-[#100c08]/10">
+                            <span>TOTAL:</span>
+                            <span id="prev-quote-total" class="text-base text-[#8d153e]">$0.00 MXN</span>
+                        </div>
+                        <p class="text-[10px] text-[#100c08]/60 italic text-right">Precios en pesos mexicanos (MXN) sin IVA</p>
+                    </div>
+                </div>
+
+                <!-- Commercial Conditions -->
+                <div class="space-y-2 pt-4 border-t border-[#8d153e]/30">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-[#8d153e]">Condiciones Comerciales</h4>
+                    <div id="prev-quote-notes" class="text-xs text-[#100c08]/85 whitespace-pre-line bg-white p-4 rounded-2xl border border-[#100c08]/10 shadow-sm leading-relaxed">
+                        <!-- Dynamic notes -->
+                    </div>
+                </div>
+
+                <!-- Footer contact -->
+                <div class="text-center pt-8 text-xs text-[#100c08]/70 border-t border-[#100c08]/10">
+                    <p class="font-semibold text-[#100c08]">¿Tienes alguna duda? Con gusto te atendemos 🙌</p>
+                    <p class="mt-1">lachingoneriagrafia@gmail.com</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CLIENT REGISTRATION & EDIT MODAL -->
+    <div id="clientModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black/75 backdrop-blur-custom flex items-center justify-center p-4">
+        <div class="border rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl modal-box">
+            <div class="flex justify-between items-center p-5 border-b modal-header-box">
+                <h3 id="client-modal-title" class="text-base font-bold flex items-center gap-2">
+                    <i data-lucide="user-plus" class="w-5 h-5 text-cyan-500"></i> Registrar Nuevo Cliente
+                </h3>
+                <button onclick="closeModal('clientModal')" class="opacity-75 hover:opacity-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <form id="clientForm" onsubmit="saveClient(event)" class="space-y-4">
+                    <input type="hidden" id="client-edit-id" value="">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 opacity-85">Empresa *</label>
+                        <input type="text" id="client-name" required placeholder="Ej. Impresos SA de CV" class="w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-cyan-500 bg-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 opacity-85">Nombre</label>
+                        <input type="text" id="client-contact" placeholder="Lic. María Gómez" class="w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-cyan-500 bg-transparent">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1 opacity-85">Teléfono</label>
+                            <input type="text" id="client-phone" placeholder="55 1234 5678" class="w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-cyan-500 bg-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1 opacity-85">Correo Electrónico</label>
+                            <input type="email" id="client-email" placeholder="contacto@empresa.com" class="w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-cyan-500 bg-transparent">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 opacity-85">RFC / Datos Fiscales</label>
+                        <input type="text" id="client-rfc" placeholder="XAXX010101000" class="w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-cyan-500 bg-transparent">
+                    </div>
+                    <div class="flex justify-end gap-3 pt-2">
+                        <button type="button" onclick="closeModal('clientModal')" class="px-4 py-2.5 text-xs font-semibold border rounded-xl">Cancelar</button>
+                        <button type="submit" class="px-5 py-2.5 text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-500 rounded-xl shadow-md">Guardar Cliente</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        let clients = JSON.parse(localStorage.getItem('producTrack_clients')) || [
+            { id: 'c1', name: 'Corporativo Gráfico SA', contact: 'Ana Torres', phone: '55 9876 5432', email: 'ventas@corp.com', rfc: 'CGR120304ABC' },
+            { id: 'c2', name: 'Publicidad Creativa MX', contact: 'Carlos Ruiz', phone: '55 1122 3344', email: 'carlos@creativa.com', rfc: 'PCR900807XYZ' },
+            { id: 'c3', name: 'Eventos del Norte', contact: 'Lucía Méndez', phone: '81 5544 3322', email: 'lucia@norte.com', rfc: 'EEN1506188W2' }
+        ];
+
+        let quotes = JSON.parse(localStorage.getItem('producTrack_quotes')) || [
+            {
+                id: 'COT-1001',
+                project: 'Campaña Lanzamiento Verano',
+                client: 'Corporativo Gráfico SA',
+                price: 4500.00,
+                validity: '15 Días',
+                date: '2026-08-13',
+                notes: `Condiciones Comerciales
+Los precios no incluyen IVA
+Se requiere 50% de anticipo o pago completo para iniciar producción
+Esta cotización tiene una validez de 15 días naturales
+El tiempo de entrega se confirmará una vez recibido el anticipo y aprobados los archivos finales`,
+                products: [
+                    { product: 'Volantes Media Carta', qty: 2500, price: 4500.00, substrate: 'Couché 150g Brillo', dimensions: '14x21.5 cm', colors: 'CMYK 4/4', notes: 'Barniz UV brillante' }
+                ],
+                status: 'Pendiente'
+            }
+        ];
+
+        let orders = JSON.parse(localStorage.getItem('producTrack_orders')) || [
+            {
+                id: 'ORD-5001',
+                project: 'Exhibidores Punto de Venta',
+                client: 'Publicidad Creativa MX',
+                status: 'Produccion',
+                priority: 'Urgente',
+                deadline: '2026-06-25',
+                notes: 'Revisar curvas en trazos.',
+                products: [
+                    { product: 'Sticker vinil troquelado', qty: 500, price: 1200.00, substrate: 'Vinil adhesivo', dimensions: '10x10 cm', colors: 'CMYK 4/0', notes: 'Corte a registro' }
+                ]
+            }
+        ];
+
+        const kanbanStages = [
+            { key: 'Cotizaciones', label: 'Cotizaciones', color: 'border-slate-500/40 text-slate-500' },
+            { key: 'Diseno', label: 'Diseño / Preprensa', color: 'border-blue-500/40 text-blue-500' },
+            { key: 'Produccion', label: 'Producción', color: 'border-violet-500/40 text-violet-500' },
+            { key: 'Acabados', label: 'Acabados', color: 'border-amber-500/40 text-amber-500' },
+            { key: 'Empaque', label: 'Empaque', color: 'border-cyan-500/40 text-cyan-500' },
+            { key: 'Instalacion', label: 'Instalación', color: 'border-emerald-500/40 text-emerald-500' },
+            { key: 'Entregas', label: 'Entregas / Envíos', color: 'border-teal-500/40 text-teal-500' }
+        ];
+
+        let chartStatusInstance = null;
+        let chartWeeklyInstance = null;
+        window.activeClientTypeTarget = null;
+
+        window.onload = function() {
+            initTheme();
+            lucide.createIcons();
+            renderDashboard();
+            renderQuotes();
+            renderKanbanBoard();
+            renderClients();
+            renderReports();
+        };
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (html.classList.contains('light')) {
+                html.classList.remove('light');
+                html.classList.add('dark');
+                localStorage.setItem('producTrack_theme', 'dark');
+                document.getElementById('theme-icon').setAttribute('data-lucide', 'sun');
+            } else {
+                html.classList.remove('dark');
+                html.classList.add('light');
+                localStorage.setItem('producTrack_theme', 'light');
+                document.getElementById('theme-icon').setAttribute('data-lucide', 'moon');
+            }
+            applyThemeStyles();
+            lucide.createIcons();
+            renderReports();
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('producTrack_theme') || 'light';
+            const html = document.documentElement;
+            html.classList.remove('light', 'dark');
+            html.classList.add(savedTheme);
+            if (savedTheme === 'dark') {
+                document.getElementById('theme-icon')?.setAttribute('data-lucide', 'sun');
+            } else {
+                document.getElementById('theme-icon')?.setAttribute('data-lucide', 'moon');
+            }
+            applyThemeStyles();
+        }
+
+        function applyThemeStyles() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const header = document.getElementById('app-header');
+            const nav = document.getElementById('app-nav');
+            
+            if (isDark) {
+                header.className = "border-b border-rose-950/40 bg-[#100c08] text-[#f5f1e8] sticky top-0 z-40 px-4 lg:px-8 py-3 flex items-center justify-between shadow-lg transition-colors duration-300";
+                nav.className = "border-b border-rose-950/40 bg-[#100c08]/90 text-[#f5f1e8] px-4 lg:px-8 flex overflow-x-auto space-x-1 py-2 text-xs font-medium z-30 transition-colors duration-300";
+                
+                document.querySelectorAll('.card-box').forEach(el => {
+                    el.className = el.className.replace(/bg-\[#faf7f2\]|border-rose-900\/20|bg-white/g, '') + " bg-[#1a1410] border-rose-950/40 text-[#f5f1e8]";
+                });
+                document.querySelectorAll('.modal-box').forEach(el => {
+                    el.className = el.className.replace(/bg-white|border-slate-200/g, '') + " bg-[#1a1410] border-rose-900/30 text-[#f5f1e8]";
+                });
+                document.querySelectorAll('.modal-header-box').forEach(el => {
+                    el.className = el.className.replace(/bg-slate-100|border-slate-200/g, '') + " bg-[#100c08] border-rose-950/40 text-[#f5f1e8]";
+                });
+                document.querySelectorAll('.modal-section-box').forEach(el => {
+                    el.className = el.className.replace(/bg-slate-50|border-slate-200/g, '') + " bg-[#100c08]/50 border-rose-900/20";
+                });
+            } else {
+                header.className = "border-b border-[#8d153e]/20 bg-[#f5f1e8] text-[#100c08] sticky top-0 z-40 px-4 lg:px-8 py-3 flex items-center justify-between shadow-lg transition-colors duration-300";
+                nav.className = "border-b border-[#8d153e]/20 bg-[#f5f1e8]/90 text-[#100c08] px-4 lg:px-8 flex overflow-x-auto space-x-1 py-2 text-xs font-medium z-30 transition-colors duration-300";
+
+                document.querySelectorAll('.card-box').forEach(el => {
+                    el.className = el.className.replace(/bg-\[#1a1410\]|border-rose-950\/40|text-\[#f5f1e8\]/g, '') + " bg-[#faf7f2] border-[#8d153e]/20 text-[#100c08]";
+                });
+                document.querySelectorAll('.modal-box').forEach(el => {
+                    el.className = el.className.replace(/bg-\[#1a1410\]|border-rose-900\/30|text-\[#f5f1e8\]/g, '') + " bg-[#f5f1e8] border-[#8d153e]/30 text-[#100c08]";
+                });
+                document.querySelectorAll('.modal-header-box').forEach(el => {
+                    el.className = el.className.replace(/bg-\[#100c08\]|border-rose-950\/40/g, '') + " bg-[#faf7f2] border-[#8d153e]/20 text-[#100c08]";
+                });
+                document.querySelectorAll('.modal-section-box').forEach(el => {
+                    el.className = el.className.replace(/bg-\[#100c08\]\/50|border-rose-900\/20/g, '') + " bg-white/70 border-[#8d153e]/15";
+                });
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 opacity-75 hover:opacity-100";
+            });
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            if (activeBtn) {
+                activeBtn.className = "tab-btn px-4 py-2 rounded-lg transition flex items-center gap-2 bg-[#8d153e] text-white shadow";
+            }
+            lucide.createIcons();
+            if (tabId === 'reportes') renderReports();
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgCol = type === 'error' ? 'bg-rose-600' : type === 'warning' ? 'bg-amber-600' : 'bg-[#8d153e]';
+            toast.className = `${bgCol} text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold flex items-center gap-2 transition transform translate-y-2`;
+            toast.innerHTML = `<i data-lucide="${type === 'error' ? 'alert-circle' : 'check-circle'}" class="w-4 h-4"></i> ${message}`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showClientDropdown(type) {
+            window.activeClientTypeTarget = type;
+            const input = document.getElementById(`${type}-client-input`);
+            const dropdown = document.getElementById(`${type}-client-dropdown`);
+            renderClientDropdownItems(type, input.value);
+            dropdown.classList.remove('hidden');
+        }
+
+        function handleClientInput(type) {
+            window.activeClientTypeTarget = type;
+            const input = document.getElementById(`${type}-client-input`);
+            const dropdown = document.getElementById(`${type}-client-dropdown`);
+            dropdown.classList.remove('hidden');
+            renderClientDropdownItems(type, input.value);
+        }
+
+        function renderClientDropdownItems(type, filterText = '') {
+            const dropdown = document.getElementById(`${type}-client-dropdown`);
+            const filtered = clients.filter(c => c.name.toLowerCase().includes(filterText.toLowerCase()));
+            
+            let html = '';
+            if (filtered.length > 0) {
+                filtered.forEach(c => {
+                    const escapedName = c.name.replace(/'/g, "\\'");
+                    html += `<div onclick="selectClient('${type}', '${escapedName}')" class="px-4 py-2.5 hover:bg-[#8d153e]/10 cursor-pointer text-xs border-b flex justify-between items-center">
+                        <span class="font-semibold">${c.name}</span>
+                        <span class="text-[10px] opacity-75">${c.phone || c.email || ''}</span>
+                    </div>`;
+                });
+            }
+
+            const cleanText = filterText.replace(/'/g, "\\'");
+            html += `<div onclick="openQuickRegisterClient('${type}', '${cleanText}')" class="px-4 py-3 bg-[#8d153e]/20 hover:bg-[#8d153e]/30 text-[#8d153e] dark:text-rose-300 cursor-pointer text-xs font-semibold flex items-center gap-2">
+                <i data-lucide="user-plus" class="w-4 h-4"></i> Registrar Cliente: "${filterText || 'Nuevo'}"
+            </div>`;
+
+            dropdown.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function selectClient(type, clientName) {
+            document.getElementById(`${type}-client-input`).value = clientName;
+            document.getElementById(`${type}-client-dropdown`).classList.add('hidden');
+        }
+
+        function openQuickRegisterClient(type, defaultName) {
+            document.getElementById(`${type}-client-dropdown`).classList.add('hidden');
+            document.getElementById('client-edit-id').value = '';
+            document.getElementById('client-modal-title').innerHTML = '<i data-lucide="user-plus" class="w-5 h-5 text-cyan-500"></i> Registrar Nuevo Cliente';
+            document.getElementById('client-name').value = defaultName;
+            document.getElementById('client-contact').value = '';
+            document.getElementById('client-phone').value = '';
+            document.getElementById('client-email').value = '';
+            document.getElementById('client-rfc').value = '';
+            document.getElementById('clientModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        window.addEventListener('click', function(e) {
+            ['quote'].forEach(t => {
+                const input = document.getElementById(`${t}-client-input`);
+                const dropdown = document.getElementById(`${t}-client-dropdown`);
+                if (input && dropdown && !input.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        });
+
+        function addProductRow(type, data = null) {
+            const container = document.getElementById(`${type}-products-list`);
+            const rowId = 'prod-row-' + Math.random().toString(36).substring(2, 9);
+            const div = document.createElement('div');
+            div.id = rowId;
+            div.className = "p-5 rounded-2xl border relative space-y-3.5 modal-section-box";
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold flex items-center gap-1.5"><i data-lucide="package" class="w-4 h-4 text-[#8d153e]"></i> Artículo / Producto</span>
+                    <button type="button" onclick="removeProductRow('${type}', '${rowId}')" class="opacity-75 hover:opacity-100 text-rose-500 text-xs flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
+                    <div class="sm:col-span-2">
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Nombre del Producto / Trabajo *</label>
+                        <input type="text" name="prod-name" required value="${data?.product || ''}" placeholder="Ej. Tarjetas de presentación" class="w-full px-3.5 py-2 border rounded-xl text-xs focus:outline-none focus:border-[#8d153e] bg-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Cantidad *</label>
+                        <input type="number" name="prod-qty" required value="${data?.qty || 1000}" min="1" class="w-full px-3.5 py-2 border rounded-xl text-xs focus:outline-none focus:border-[#8d153e] bg-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Precio Total ($) *</label>
+                        <input type="number" step="0.01" name="prod-price" required value="${data?.price || 0}" min="0" oninput="calculateQuoteTotal()" class="w-full px-3.5 py-2 border border-[#8d153e]/60 rounded-xl text-xs font-bold text-[#8d153e] dark:text-rose-300 focus:outline-none bg-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Sustrato / Material</label>
+                        <input type="text" name="prod-substrate" value="${data?.substrate || ''}" placeholder="Ej. Couché 300g" class="w-full px-3.5 py-2 border rounded-xl text-xs focus:outline-none focus:border-[#8d153e] bg-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Medidas</label>
+                        <input type="text" name="prod-dimensions" value="${data?.dimensions || ''}" placeholder="Ej. 9x5 cm" class="w-full px-3.5 py-2 border rounded-xl text-xs focus:outline-none focus:border-[#8d153e] bg-transparent">
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Tintas / Color</label>
+                        <input type="text" name="prod-colors" value="${data?.colors || ''}" placeholder="Ej. CMYK 4/4" class="w-full px-3.5 py-2 border rounded-xl text-xs focus:outline-none focus:border-[#8d153e] bg-transparent">
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label class="block text-[11px] font-medium opacity-75 mb-1">Especificaciones Técnicas / Acabados</label>
+                        <input type="text" name="prod-notes" value="${data?.notes || ''}" placeholder="Ej. Laminado mate" class="w-full px-3.5 py-2 border rounded-xl text-xs focus:outline-none focus:border-[#8d153e] bg-transparent">
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
+            calculateQuoteTotal();
+        }
+
+        function removeProductRow(type, rowId) {
+            const el = document.getElementById(rowId);
+            if (el) el.remove();
+            calculateQuoteTotal();
+        }
+
+        function calculateQuoteTotal() {
+            const container = document.getElementById('quote-products-list');
+            let total = 0;
+            container.querySelectorAll('div[id^="prod-row-"]').forEach(row => {
+                const priceInput = row.querySelector('input[name="prod-price"]');
+                const price = parseFloat(priceInput?.value) || 0;
+                total += price;
+            });
+            document.getElementById('quote-price').value = total.toFixed(2);
+        }
+
+        function collectProductsFromUI(type) {
+            const container = document.getElementById(`${type}-products-list`);
+            const products = [];
+            container.querySelectorAll('div[id^="prod-row-"]').forEach(row => {
+                const prod = {
+                    product: row.querySelector('input[name="prod-name"]').value,
+                    qty: parseInt(row.querySelector('input[name="prod-qty"]').value) || 1,
+                    price: parseFloat(row.querySelector('input[name="prod-price"]').value) || 0,
+                    substrate: row.querySelector('input[name="prod-substrate"]').value,
+                    dimensions: row.querySelector('input[name="prod-dimensions"]').value,
+                    colors: row.querySelector('input[name="prod-colors"]').value,
+                    notes: row.querySelector('input[name="prod-notes"]').value
+                };
+                products.push(prod);
+            });
+            return products;
+        }
+
+        function renderDashboard() {
+            const activeCount = orders.filter(o => o.status !== 'Entregas').length;
+            const pendingQuotesCount = quotes.filter(q => q.status === 'Pendiente').length;
+            const prodCount = orders.filter(o => o.status === 'Produccion' || o.status === 'Acabados').length;
+
+            document.getElementById('stat-active-orders').innerText = activeCount;
+            document.getElementById('stat-pending-quotes').innerText = pendingQuotesCount;
+            document.getElementById('stat-production-orders').innerText = prodCount;
+
+            const tbody = document.getElementById('dashboard-recent-orders');
+            tbody.innerHTML = '';
+            orders.slice(0, 5).forEach(ord => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                        <td class="p-3 font-semibold text-[#8d153e]">${ord.id}</td>
+                        <td class="p-3">
+                            <div class="font-semibold">${ord.project || 'Sin proyecto'}</div>
+                            <div class="text-[11px] opacity-75">${ord.client}</div>
+                        </td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-md border">${ord.status}</span></td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded text-[11px] ${ord.priority === 'Urgente' ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30' : 'opacity-75'}">${ord.priority}</span></td>
+                        <td class="p-3 opacity-85">${ord.deadline}</td>
+                    </tr>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function openNewQuoteModal() {
+            document.getElementById('quote-edit-id').value = '';
+            document.getElementById('quote-modal-title').innerText = 'Generar Nueva Cotización';
+            document.getElementById('quote-project').value = '';
+            document.getElementById('quote-client-input').value = '';
+            document.getElementById('quote-price').value = '0.00';
+            document.getElementById('quote-notes').value = `Condiciones Comerciales
+Los precios no incluyen IVA
+Se requiere 50% de anticipo o pago completo para iniciar producción
+Esta cotización tiene una validez de 15 días naturales
+El tiempo de entrega se confirmará una vez recibido el anticipo y aprobados los archivos finales`;
+            document.getElementById('quote-products-list').innerHTML = '';
+            addProductRow('quote');
+            document.getElementById('quoteModal').classList.remove('hidden');
+        }
+
+        function openEditQuoteModal(quoteId) {
+            const q = quotes.find(item => item.id === quoteId);
+            if (!q) return;
+
+            document.getElementById('quote-edit-id').value = q.id;
+            document.getElementById('quote-modal-title').innerText = `Editar Cotización: ${q.id}`;
+            document.getElementById('quote-project').value = q.project || '';
+            document.getElementById('quote-client-input').value = q.client || '';
+            document.getElementById('quote-price').value = q.price.toFixed(2);
+            document.getElementById('quote-validity').value = q.validity || '15 Días';
+            document.getElementById('quote-notes').value = q.notes || '';
+            
+            const container = document.getElementById('quote-products-list');
+            container.innerHTML = '';
+            if (q.products && q.products.length > 0) {
+                q.products.forEach(p => addProductRow('quote', p));
+            } else {
+                addProductRow('quote');
+            }
+
+            document.getElementById('quoteModal').classList.remove('hidden');
+        }
+
+        function openQuotePreview(quoteId) {
+            const q = quotes.find(item => item.id === quoteId);
+            if (!q) return;
+
+            document.getElementById('prev-quote-id').innerText = q.id;
+            document.getElementById('prev-quote-client').innerText = q.client || 'Sin cliente';
+            document.getElementById('prev-quote-project').innerText = q.project || 'N/D';
+            document.getElementById('prev-quote-date').innerText = q.date || new Date().toISOString().split('T')[0];
+            document.getElementById('prev-quote-validity').innerText = q.validity || '15 Días';
+            document.getElementById('prev-quote-notes').innerText = q.notes || '';
+
+            const tbody = document.getElementById('prev-quote-items');
+            tbody.innerHTML = '';
+            let subtotal = 0;
+
+            if (q.products && q.products.length > 0) {
+                q.products.forEach((p, idx) => {
+                    subtotal += p.price;
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-semibold text-slate-500">${idx + 1}</td>
+                            <td class="p-3 font-bold text-[#100c08]">${p.product}</td>
+                            <td class="p-3 text-slate-700">
+                                ${p.substrate ? `Sustrato: ${p.substrate}` : ''}
+                                ${p.dimensions ? `<br>Medidas: ${p.dimensions}` : ''}
+                                ${p.colors ? `<br>Tintas: ${p.colors}` : ''}
+                                ${p.notes ? `<br>Acabados: ${p.notes}` : ''}
+                            </td>
+                            <td class="p-3 text-center font-semibold text-slate-800">${p.qty.toLocaleString()} pzs</td>
+                            <td class="p-3 text-right font-bold text-[#100c08]">$${p.price.toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Sin productos especificados</td></tr>`;
+            }
+
+            document.getElementById('prev-quote-subtotal').innerText = `$${subtotal.toFixed(2)}`;
+            document.getElementById('prev-quote-total').innerText = `$${subtotal.toFixed(2)} MXN`;
+
+            document.getElementById('quotePreviewModal').classList.remove('hidden');
+        }
+
+        function printQuotePreview() {
+            window.print();
+        }
+
+        function saveQuote(e) {
+            e.preventDefault();
+            const editId = document.getElementById('quote-edit-id').value;
+            const client = document.getElementById('quote-client-input').value.trim();
+            const project = document.getElementById('quote-project').value.trim();
+            const price = parseFloat(document.getElementById('quote-price').value) || 0;
+            const validity = document.getElementById('quote-validity').value;
+            const notes = document.getElementById('quote-notes').value.trim();
+            const products = collectProductsFromUI('quote');
+
+            if (!client) {
+                showNotification('El cliente es requerido', 'error');
+                return;
+            }
+
+            if (editId) {
+                const existing = quotes.find(q => q.id === editId);
+                if (existing) {
+                    existing.client = client;
+                    existing.project = project;
+                    existing.price = price;
+                    existing.validity = validity;
+                    existing.notes = notes;
+                    existing.products = products;
+                }
+                showNotification('Cotización actualizada con éxito');
+            } else {
+                const newQuote = {
+                    id: 'COT-' + Math.floor(1000 + Math.random() * 9000),
+                    project,
+                    client,
+                    price,
+                    validity,
+                    date: new Date().toISOString().split('T')[0],
+                    notes,
+                    products,
+                    status: 'Pendiente'
+                };
+                quotes.unshift(newQuote);
+                showNotification('Cotización guardada con éxito');
+            }
+
+            localStorage.setItem('producTrack_quotes', JSON.stringify(quotes));
+            closeModal('quoteModal');
+            renderQuotes();
+            renderKanbanBoard();
+            renderDashboard();
+        }
+
+        function renderQuotes() {
+            const tbody = document.getElementById('quotes-table-body');
+            tbody.innerHTML = '';
+            if (quotes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center opacity-60">No hay cotizaciones registradas.</td></tr>`;
+                return;
+            }
+            quotes.forEach(q => {
+                const prodSummary = q.products.map(p => `${p.qty}x ${p.product} ($${p.price.toFixed(2)})`).join(', ');
+                const statusBadge = q.status === 'Aprobada' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-500 border border-amber-500/30';
+                tbody.innerHTML += `
+                    <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                        <td class="p-3.5 font-bold text-[#8d153e]">${q.id}</td>
+                        <td class="p-3.5">
+                            <div class="font-semibold">${q.project || 'Sin proyecto'}</div>
+                            <div class="text-[11px] opacity-75">${q.client}</div>
+                        </td>
+                        <td class="p-3.5 opacity-85 max-w-xs truncate" title="${prodSummary}">${prodSummary}</td>
+                        <td class="p-3.5 font-semibold">$${q.price.toFixed(2)}</td>
+                        <td class="p-3.5"><span class="px-2.5 py-1 rounded-md text-[11px] font-semibold ${statusBadge}">${q.status}</span></td>
+                        <td class="p-3.5 text-right space-x-1.5">
+                            <button onclick="openQuotePreview('${q.id}')" title="Previsualizar Cotización" class="p-1.5 border rounded-lg transition hover:bg-black/10 dark:hover:bg-white/10"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button onclick="openEditQuoteModal('${q.id}')" title="Editar Cotización" class="p-1.5 border rounded-lg transition hover:bg-black/10 dark:hover:bg-white/10 text-[#8d153e]"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                            ${q.status === 'Pendiente' ? `<button onclick="convertQuoteToOrder('${q.id}')" class="px-3 py-1.5 bg-[#8d153e] hover:bg-[#6d0f2e] text-white rounded-lg font-semibold text-xs transition">Aprobar</button>` : `<span class="text-xs opacity-50">Aprobada</span>`}
+                            <button onclick="deleteQuote('${q.id}')" title="Eliminar" class="p-1.5 border rounded-lg transition hover:bg-rose-500/20 text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function convertQuoteToOrder(quoteId) {
+            const q = quotes.find(item => item.id === quoteId);
+            if (!q) return;
+
+            q.status = 'Aprobada';
+            localStorage.setItem('producTrack_quotes', JSON.stringify(quotes));
+
+            const newOrd = {
+                id: 'ORD-' + Math.floor(5000 + Math.random() * 9000),
+                project: q.project || 'Trabajo por Cotización',
+                client: q.client,
+                status: 'Diseno',
+                priority: 'Normal',
+                deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                notes: q.notes,
+                products: q.products
+            };
+
+            orders.unshift(newOrd);
+            localStorage.setItem('producTrack_orders', JSON.stringify(orders));
+            renderQuotes();
+            renderKanbanBoard();
+            renderDashboard();
+            showNotification(`¡Cotización ${q.id} aprobada y convertida a Orden!`);
+            switchTab('ordenes');
+        }
+
+        function deleteQuote(id) {
+            quotes = quotes.filter(q => q.id !== id);
+            localStorage.setItem('producTrack_quotes', JSON.stringify(quotes));
+            renderQuotes();
+            renderKanbanBoard();
+            renderDashboard();
+            showNotification('Cotización eliminada', 'warning');
+        }
+
+        function getAdjacentStatus(currentStatus, direction) {
+            const keys = kanbanStages.map(s => s.key);
+            const idx = keys.indexOf(currentStatus);
+            if (idx === -1) return currentStatus;
+            const newIdx = idx + direction;
+            if (newIdx < 0 || newIdx >= keys.length) return currentStatus;
+            return keys[newIdx];
+        }
+
+        function moveOrderStatus(orderId, newStatus) {
+            const ord = orders.find(o => o.id === orderId);
+            if (ord) {
+                ord.status = newStatus;
+                localStorage.setItem('producTrack_orders', JSON.stringify(orders));
+                renderKanbanBoard();
+                renderDashboard();
+                showNotification(`Orden ${ord.id} movida a ${newStatus}`);
+            }
+        }
+
+        function deleteOrder(orderId) {
+            orders = orders.filter(o => o.id !== orderId);
+            localStorage.setItem('producTrack_orders', JSON.stringify(orders));
+            renderKanbanBoard();
+            renderDashboard();
+            showNotification('Orden eliminada', 'warning');
+        }
+
+        function renderKanbanBoard() {
+            const container = document.getElementById('kanban-columns-container');
+            container.innerHTML = '';
+            const search = document.getElementById('kanban-search')?.value.toLowerCase() || '';
+
+            kanbanStages.forEach(stage => {
+                let stageItems = [];
+                if (stage.key === 'Cotizaciones') {
+                    stageItems = quotes.filter(q => {
+                        const matchStatus = q.status === 'Pendiente';
+                        const matchSearch = q.id.toLowerCase().includes(search) || q.client.toLowerCase().includes(search) || (q.project && q.project.toLowerCase().includes(search));
+                        return matchStatus && matchSearch;
+                    }).map(q => ({
+                        id: q.id,
+                        project: q.project,
+                        client: q.client,
+                        status: 'Cotizaciones',
+                        priority: 'Normal',
+                        deadline: q.validity || '15 Días',
+                        products: q.products,
+                        isQuote: true
+                    }));
+                } else {
+                    stageItems = orders.filter(o => {
+                        const matchStatus = o.status === stage.key;
+                        const matchSearch = o.id.toLowerCase().includes(search) || o.client.toLowerCase().includes(search) || (o.project && o.project.toLowerCase().includes(search));
+                        return matchStatus && matchSearch;
+                    });
+                }
+
+                let cardsHtml = '';
+                stageItems.forEach(item => {
+                    const prioColor = item.priority === 'Urgente' ? 'bg-rose-500/20 text-rose-500 border-rose-500/30' : 'opacity-75 border';
+                    const prodSummary = item.products.map(p => `${p.qty}x ${p.product}`).join(' • ');
+                    
+                    let actionButtons = '';
+                    if (item.isQuote) {
+                        actionButtons = `
+                            <div class="flex justify-between items-center pt-1.5 gap-1 border-t opacity-90 text-xs">
+                                <span class="text-[10px] text-emerald-500 font-semibold">Cotización Pendiente</span>
+                                <button onclick="convertQuoteToOrder('${item.id}')" class="px-2.5 py-1 bg-[#8d153e] hover:bg-[#6d0f2e] rounded text-white text-[10px] font-semibold">Aprobar →</button>
+                            </div>
+                        `;
+                    } else {
+                        actionButtons = `
+                            <div class="flex justify-between items-center pt-1.5 gap-1 border-t opacity-90 text-xs">
+                                <button onclick="moveOrderStatus('${item.id}', '${getAdjacentStatus(stage.key, -1)}') " class="px-2 py-1 border rounded text-[10px]">←</button>
+                                <span class="text-[10px] opacity-75 truncate">${item.status}</span>
+                                <button onclick="moveOrderStatus('${item.id}', '${getAdjacentStatus(stage.key, 1)}') " class="px-2 py-1 bg-[#8d153e] text-white rounded text-[10px]">→</button>
+                            </div>
+                        `;
+                    }
+
+                    cardsHtml += `
+                        <div class="border p-3.5 rounded-xl shadow space-y-2.5 transition card-box">
+                            <div class="flex justify-between items-start">
+                                <span class="font-bold text-xs ${item.isQuote ? 'text-emerald-500' : 'text-[#8d153e]'}">${item.id}</span>
+                                ${!item.isQuote ? `<button onclick="deleteOrder('${item.id}')" class="opacity-50 hover:text-rose-500"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : `<button onclick="deleteQuote('${item.id}')" class="opacity-50 hover:text-rose-500"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>`}
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-xs leading-snug">${item.project || 'Sin proyecto'}</h4>
+                                <p class="text-[11px] opacity-75 font-medium">${item.client}</p>
+                            </div>
+                            <div class="text-[11px] p-2 rounded-lg border opacity-90">
+                                <p class="font-semibold">Productos:</p>
+                                <p class="truncate" title="${prodSummary}">${prodSummary}</p>
+                            </div>
+                            <div class="flex items-center justify-between text-xs pt-1 border-t">
+                                <span class="px-2 py-0.5 rounded font-semibold border ${prioColor}">${item.priority}</span>
+                                <span class="opacity-75 text-[10px]">${item.isQuote ? 'Vigencia' : 'Entrega'}: ${item.deadline}</span>
+                            </div>
+                            ${actionButtons}
+                        </div>
+                    `;
+                });
+
+                container.innerHTML += `
+                    <div class="border rounded-2xl p-3.5 flex flex-col min-w-[260px] max-h-[75vh] overflow-hidden card-box">
+                        <div class="flex justify-between items-center pb-3 border-b mb-3">
+                            <h3 class="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full ${stage.key === 'Cotizaciones' ? 'bg-emerald-500' : 'bg-[#8d153e]'}"></span> ${stage.label}
+                            </h3>
+                            <span class="text-[11px] px-2 py-0.5 rounded-full border font-bold">${stageItems.length}</span>
+                        </div>
+                        <div class="space-y-3 overflow-y-auto flex-1 pr-1">
+                            ${cardsHtml || '<div class="text-center py-6 opacity-50 text-xs">Sin elementos</div>'}
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function openClientModal(clientId = null) {
+            const modalTitle = document.getElementById('client-modal-title');
+            if (clientId) {
+                const c = clients.find(item => item.id === clientId);
+                if (!c) return;
+                document.getElementById('client-edit-id').value = c.id;
+                if (modalTitle) modalTitle.innerHTML = '<i data-lucide="user-check" class="w-5 h-5 text-cyan-500"></i> Editar Cliente';
+                document.getElementById('client-name').value = c.name || '';
+                document.getElementById('client-contact').value = c.contact || '';
+                document.getElementById('client-phone').value = c.phone || '';
+                document.getElementById('client-email').value = c.email || '';
+                document.getElementById('client-rfc').value = c.rfc || '';
+            } else {
+                document.getElementById('client-edit-id').value = '';
+                if (modalTitle) modalTitle.innerHTML = '<i data-lucide="user-plus" class="w-5 h-5 text-cyan-500"></i> Registrar Nuevo Cliente';
+                document.getElementById('client-name').value = '';
+                document.getElementById('client-contact').value = '';
+                document.getElementById('client-phone').value = '';
+                document.getElementById('client-email').value = '';
+                document.getElementById('client-rfc').value = '';
+            }
+            document.getElementById('clientModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function saveClient(e) {
+            e.preventDefault();
+            const editId = document.getElementById('client-edit-id').value;
+            const name = document.getElementById('client-name').value.trim();
+            const contact = document.getElementById('client-contact').value.trim();
+            const phone = document.getElementById('client-phone').value.trim();
+            const email = document.getElementById('client-email').value.trim();
+            const rfc = document.getElementById('client-rfc').value.trim();
+
+            if (editId) {
+                const c = clients.find(item => item.id === editId);
+                if (c) {
+                    c.name = name;
+                    c.contact = contact;
+                    c.phone = phone;
+                    c.email = email;
+                    c.rfc = rfc;
+                }
+                showNotification('Cliente actualizado con éxito');
+            } else {
+                const newC = { id: 'c_' + Date.now(), name, contact, phone, email, rfc };
+                clients.push(newC);
+                showNotification('Cliente registrado con éxito');
+            }
+
+            localStorage.setItem('producTrack_clients', JSON.stringify(clients));
+            closeModal('clientModal');
+            renderClients();
+
+            if (window.activeClientTypeTarget) {
+                const targetInput = document.getElementById(`${window.activeClientTypeTarget}-client-input`);
+                if (targetInput) targetInput.value = name;
+            }
+        }
+
+        function renderClients() {
+            const tbody = document.getElementById('clients-table-body');
+            tbody.innerHTML = '';
+            if (clients.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center opacity-50">No hay clientes registrados.</td></tr>`;
+                return;
+            }
+            clients.forEach(c => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                        <td class="p-3.5 font-bold">${c.name}</td>
+                        <td class="p-3.5 opacity-85">${c.contact || 'N/D'}</td>
+                        <td class="p-3.5 opacity-85">${c.phone || 'N/D'}</td>
+                        <td class="p-3.5 opacity-85">${c.email || 'N/D'}</td>
+                        <td class="p-3.5 opacity-75 font-mono text-[11px]">${c.rfc || 'N/D'}</td>
+                        <td class="p-3.5 text-right space-x-1.5">
+                            <button onclick="openClientModal('${c.id}')" title="Editar Cliente" class="p-1.5 border rounded-lg transition hover:bg-black/10 text-cyan-500"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                            <button onclick="deleteClient('${c.id}')" title="Eliminar" class="p-1.5 border rounded-lg transition hover:bg-rose-500/20 text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function deleteClient(id) {
+            clients = clients.filter(c => c.id !== id);
+            localStorage.setItem('producTrack_clients', JSON.stringify(clients));
+            renderClients();
+            showNotification('Cliente eliminado', 'warning');
+        }
+
+        function renderReports() {
+            const ctxStatus = document.getElementById('chart-status');
+            if (ctxStatus) {
+                if (chartStatusInstance) chartStatusInstance.destroy();
+                const statusCounts = kanbanStages.map(s => {
+                    if (s.key === 'Cotizaciones') {
+                        return quotes.filter(q => q.status === 'Pendiente').length;
+                    }
+                    return orders.filter(o => o.status === s.key).length;
+                });
+                chartStatusInstance = new Chart(ctxStatus, {
+                    type: 'doughnut',
+                    data: {
+                        labels: kanbanStages.map(s => s.label),
+                        datasets: [{
+                            data: statusCounts,
+                            backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#14b8a6']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { color: document.documentElement.classList.contains('dark') ? '#f5f1e8' : '#100c08', font: { size: 10 } } } }
+                    }
+                });
+            }
+
+            const ctxWeekly = document.getElementById('chart-weekly');
+            if (chartWeeklyInstance) chartWeeklyInstance.destroy();
+            chartWeeklyInstance = new Chart(ctxWeekly, {
+                type: 'bar',
+                data: {
+                    labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+                    datasets: [{
+                        label: 'Órdenes Completadas',
+                        data: [4, 7, 5, 8, 12, 6, 2],
+                        backgroundColor: '#8d153e',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: document.documentElement.classList.contains('dark') ? '#f5f1e8' : '#100c08' }, grid: { display: false } },
+                        y: { ticks: { color: document.documentElement.classList.contains('dark') ? '#f5f1e8' : '#100c08' }, grid: { color: 'rgba(141, 21, 62, 0.1)' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
